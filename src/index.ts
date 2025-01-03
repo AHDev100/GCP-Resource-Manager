@@ -2,7 +2,6 @@ import figlet from "figlet";
 import { OptionValues, program } from "commander";
 import fs from "fs";
 import inquirer from "inquirer";
-// import util from 'util';
 import { spawn } from 'child_process';
 
 const gcp_provider : string = `
@@ -16,8 +15,29 @@ const gcp_provider : string = `
   }
 `;
 
-async function runTerraformCommand(command : string, args : Array<String>){
-  
+function runTerraformCommand(command : string, args : Array<string>) : Promise<void> {
+  let tf = spawn(command, args, { shell: true });
+  return new Promise((resolve, reject) => {
+    console.log(`Running command: ${command} ${args.join(' ')}`);
+
+    tf.stdout.on('data', (data) => {
+      console.log(data.toString());
+    });
+
+    tf.stderr.on('data', (data) => {
+      console.log(data.toString());
+      reject();
+    });
+
+    tf.on('close', (code) => {
+      console.log(`Command completed: ${command} ${args.join(' ')} with exit code ${code}`);
+      if (code == 0){
+        resolve();
+      } else {
+        reject(new Error(`Command failed with exit code ${code}`));
+      }
+    });
+  });  
 }
 
 async function spawnTerraformLifeCycle(){
@@ -27,13 +47,13 @@ async function spawnTerraformLifeCycle(){
     await runTerraformCommand("terraform", ["validate"]);
     await runTerraformCommand("terraform", ["apply"]);
   } catch (err) {
-    console.error(err);
+    err && console.error(err);
   }
 }
 
 async function generateTFManual() : Promise<Number> {
   try {
-    /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being */
+    /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
     await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
     return 0;
   } catch (err){
@@ -44,7 +64,7 @@ async function generateTFManual() : Promise<Number> {
 
 async function generateTFJSON(filepath : String) : Promise<Number> {
   try {
-    /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being */
+    /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
     await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
     return 0;
   } catch (err){
@@ -88,14 +108,3 @@ program
   });
 
 program.parse(process.argv);
-
-/* FOR REFERENCE: EXECUTE SHELL COMMANDS - FOR TERRAFORM OUTPUTS => Use exec if you want the output buffer returned all at once, use spawn if you want live output*/
-
-// const exec = util.promisify(require('child_process').exec);
-
-// async function ls() {
-//   const { stdout, stderr } = await exec('echo 3 + 2');
-//   console.log('stdout:', stdout);
-//   console.log('stderr:', stderr);
-// }
-// ls();
