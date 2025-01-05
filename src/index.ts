@@ -12,19 +12,19 @@ const gcp_provider : string = `
         version = "6.8.0"
       }
     }
-  }
+  }\n
 `;
 
 function runTerraformCommand(command : string, args : Array<string>) : Promise<void> {
-  let tf = spawn(command, args, { shell: true });
+  let tf = spawn(command, args, { stdio: "inherit", shell: true });
   return new Promise((resolve, reject) => {
     console.log(`Running command: ${command} ${args.join(' ')}`);
 
-    tf.stdout.on('data', (data) => {
+    tf.stdout?.on('data', (data) => {
       console.log(data.toString());
     });
 
-    tf.stderr.on('data', (data) => {
+    tf.stderr?.on('data', (data) => {
       console.log(data.toString());
       reject();
     });
@@ -163,7 +163,7 @@ async function handleResource() : Promise<void> {
 
     resourceBlock += "}\n";
 
-    console.log(resourceBlock);
+    // console.log(resourceBlock);
 
     await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a+' });
 
@@ -271,19 +271,21 @@ async function generateTFManual() : Promise<Number> {
               }
             ]);
 
-            outputBlock += `  ${kvpair.key} = ${kvpair.value}`;
+            outputBlock += `  ${kvpair.key} = ${kvpair.value}\n`;
 
             const continueOutputKVPs = await inquirer.prompt([
               {
                 type: "confirm",
                 name: "yes",
-                message: "Do you want to add another output Key-Value Pair?",
+                message: "Do you want to add another value?",
                 default: false
               }
             ]);
 
             addOutputKVPs = continueOutputKVPs.yes;
           }
+
+          outputBlock += "}\n";
 
           await fs.promises.writeFile('outputs.tf', outputBlock, { flag: 'a+' });
   
