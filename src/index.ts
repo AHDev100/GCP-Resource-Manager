@@ -51,10 +51,258 @@ async function spawnTerraformLifeCycle(){
   }
 }
 
+async function handleNestedBlock(blockName: string, indentLevel: number) : Promise<string> {
+  let block : string = `${" ".repeat(indentLevel)} ${blockName} {\n`;
+  
+  let addFieldOrBlock : boolean = true; 
+
+  while(addFieldOrBlock){
+    const blockField = await inquirer.prompt([
+      {
+        type: "list", 
+        name: "fieldType", 
+        message: "What would you like to specify in the block?",
+        choices: ["Key-Value Pair", "Nested Block", "Done With Block"]
+      }
+    ]);
+
+    if (blockField.fieldType == "Key-Value Pair"){
+      const kvpair = await inquirer.prompt([
+        {
+          type: "input",
+          name: "key",
+          message: "Enter the key: "
+        },
+        {
+          type: "input",
+          name: "value",
+          message: "Enter the value"
+        }
+      ]);
+
+      block += `  ${kvpair.key} = ${kvpair.value}\n`;
+    } else if (blockField.fieldType == "Nested Block"){
+      const nestedBlockAnswers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "nestedBlockName",
+          message: "Enter the name of the nested block:",
+        },
+      ]);
+
+      block += await handleNestedBlock(nestedBlockAnswers.nestedBlockName, indentLevel + 1);
+    } else {
+      addFieldOrBlock = false;
+    }
+  }
+
+  block += `${"  ".repeat(indentLevel)}}\n`;
+  return block;
+}
+
+async function handleResource() : Promise<void> {
+  let addResource : boolean = true;
+    
+  while (addResource){
+    const resourcePrompt = await inquirer.prompt([
+      {
+        type: "input",
+        name: "resourceType",
+        message: "Enter the resource type"
+      }, 
+      {
+        type: "input",
+        name: "resourceName",
+        message: "Enter a name for the resource"
+      }
+    ]);
+    
+    let resourceBlock = `\nresource \"${resourcePrompt.resourceType}\" \"${resourcePrompt.resourceName}\" {\n`;
+
+    let addFieldOrBlock : boolean = true; 
+
+    while(addFieldOrBlock){
+      const resourceField = await inquirer.prompt([
+        {
+          type: "list", 
+          name: "fieldType", 
+          message: "What would you like to specify in the resource?",
+          choices: ["Key-Value Pair", "Nested Block", "Done With Resource"]
+        }
+      ]);
+
+      if (resourceField.fieldType == "Key-Value Pair"){
+        const kvpair = await inquirer.prompt([
+          {
+            type: "input",
+            name: "key",
+            message: "Enter the key: "
+          },
+          {
+            type: "input",
+            name: "value",
+            message: "Enter the value"
+          }
+        ]);
+
+        resourceBlock += `  ${kvpair.key} = ${kvpair.value}\n`; 
+      } else if (resourceField.fieldType == "Nested Block"){
+        const nestedBlock = await inquirer.prompt([
+          {
+            type: "input",
+            name: "name",
+            message: "Enter the name for the nested block"
+          }
+        ]);
+        
+        resourceBlock += await handleNestedBlock(nestedBlock.name, 2);
+      } else {
+        addFieldOrBlock = false;
+      }
+    }
+
+    resourceBlock += "}\n";
+
+    console.log(resourceBlock);
+
+    await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a+' });
+
+    const continueResources = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "yes",
+        message: "Do you want to add another resource?",
+        default: false
+      }
+    ]);
+
+    addResource = continueResources.yes;
+  }
+}
+
 async function generateTFManual() : Promise<Number> {
   try {
-    /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
-    await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
+    let addBlock : boolean = true;
+
+    while(addBlock){
+      const blockType = await inquirer.prompt([
+        {
+          type: "list", 
+          name: "fieldType", 
+          message: "What would you like to specify in the resource?",
+          choices: ["Provider", "Resource", "Output", "Done"]
+        }
+      ]);
+
+      if (blockType.fieldType == "Provider"){
+        const provider = await inquirer.prompt([
+          {
+            type: "input",
+            name: "name",
+            message: "Enter the provider name"
+          }
+        ]);
+
+        let providerBlock = ` provider ${provider.name} {\n`;
+
+        let collectProducerKVs : boolean = true; 
+
+        while (collectProducerKVs){
+          const ready = await inquirer.prompt([
+            {
+              type: "list",
+              name: "yes",
+              message: "Do you have a key and value to provide for the block?",
+              choices: ["Yes", "No"]
+            }
+          ]);
+
+          if (ready.yes == "Yes"){
+            const kvpair = await inquirer.prompt([
+              {
+                type: "input",
+                name: "key",
+                message: "Enter the key: "
+              },
+              {
+                type: "input",
+                name: "value",
+                message: "Enter the value"
+              }
+            ]);
+
+            providerBlock += `  ${kvpair.key} = ${kvpair.value}\n`; 
+          } else {
+            collectProducerKVs = false; 
+          }
+        }
+
+        providerBlock += "}\n";
+        await fs.promises.writeFile('main.tf', providerBlock, { flag: 'a+' });
+      } else if (blockType.fieldType == "Resource"){
+        await handleResource();
+      } else if (blockType.fieldType == "Output"){
+        let addOutput : boolean = true; 
+        
+        while(addOutput){
+          const output = await inquirer.prompt([
+            {
+              type: "input",
+              name: "name",
+              message: "Provide the name for the output"
+            }
+          ]);
+  
+          let outputBlock = `output \"${output.name}\" {\n`; 
+  
+          let addOutputKVPs : boolean = true; 
+
+          while(addOutputKVPs){
+            const kvpair = await inquirer.prompt([
+              {
+                type: "input",
+                name: "key",
+                message: "Enter Key:"
+              },
+              {
+                type: "input",
+                name: "value",
+                message: "Enter Value:"
+              }
+            ]);
+
+            outputBlock += `  ${kvpair.key} = ${kvpair.value}`;
+
+            const continueOutputKVPs = await inquirer.prompt([
+              {
+                type: "confirm",
+                name: "yes",
+                message: "Do you want to add another output Key-Value Pair?",
+                default: false
+              }
+            ]);
+
+            addOutputKVPs = continueOutputKVPs.yes;
+          }
+
+          await fs.promises.writeFile('outputs.tf', outputBlock, { flag: 'a+' });
+  
+          const continueOutputs = await inquirer.prompt([
+            {
+              type: "confirm",
+              name: "yes",
+              message: "Do you want to add another output?",
+              default: false
+            }
+          ]);
+
+          addOutput = continueOutputs.yes;
+        }
+      } else {
+        addBlock = false; 
+      }
+    }
+
     return 0;
   } catch (err){
     console.error(err);
@@ -64,8 +312,6 @@ async function generateTFManual() : Promise<Number> {
 
 async function generateTFJSON(filepath : String) : Promise<Number> {
   try {
-    /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
-    await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
     return 0;
   } catch (err){
     console.error(err);
@@ -93,15 +339,24 @@ program
     if (filepath && filepath.length) {
       // console.log("Read file:", filepath);
       if (fs.existsSync(filepath)){
+        /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
+        await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
         await generateTFJSON(filepath);
         await spawnTerraformLifeCycle();
       } else {
-        console.error("File", filepath, "doesn't exist :(");
+        console.error("File", filepath, "not found :(");
       }
     } else if (options.manual) {
-      console.log("We're in manual mode");
+      // console.log("We're in manual mode");
+      /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
+      await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
       await generateTFManual();
-      await spawnTerraformLifeCycle();
+      await spawnTerraformLifeCycle(); // TODO: Give option to destroy resources immediately after
+        // .then(async () => {
+        //   await inquirer.prompt([
+
+        //   ]);
+        // });
     } else {
       console.error("No valid option provided.");
     }
