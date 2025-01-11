@@ -189,7 +189,7 @@ async function generateTFManual() : Promise<Number> {
         {
           type: "list", 
           name: "fieldType", 
-          message: "What would you like to specify in the resource?",
+          message: "What block would you like to add?",
           choices: ["Provider", "Resource", "Output", "Done"]
         }
       ]);
@@ -312,10 +312,54 @@ async function generateTFManual() : Promise<Number> {
   }
 }
 
-async function generateTFJSON(filepath : String) : Promise<Number> {
+async function generateTFJSON(filepath: string): Promise<number> {
   try {
+    const data = JSON.parse((await fs.promises.readFile(filepath, "utf-8")));
+    const provider = data.provider;
+
+    let providerBlock = `provider "${provider.name}" {\n`;
+    for (const [key, value] of Object.entries(provider)) {
+      if (key !== "name") {
+        providerBlock += `  ${key} = ${JSON.stringify(value)}\n`;
+      }
+    }
+    providerBlock += "}\n";
+    await fs.promises.writeFile('main.tf', providerBlock, { flag: 'a+' });
+
+    const resources = data.resources;
+    for (const resource of resources) {
+      let resourceBlock = `resource "${resource.type}" "${resource.name}" {\n`;
+      for (const [key, value] of Object.entries(resource.properties)) {
+        if (value != null) {
+          if (typeof value === "object" && !Array.isArray(value)) {
+            resourceBlock += `  ${key} {\n`;
+            for (const [nestedKey, nestedValue] of Object.entries(value)) {
+              resourceBlock += `    ${nestedKey} = ${JSON.stringify(nestedValue)}\n`;
+            }
+            resourceBlock += "  }\n";
+          } else if (Array.isArray(value)) {
+            if (key === "tags") {
+              resourceBlock += `  ${key} = ${JSON.stringify(value)}\n`;
+            } else {
+              value.forEach((nestedObj) => {
+                resourceBlock += `  ${key} {\n`;
+                for (const [nestedKey, nestedValue] of Object.entries(nestedObj)) {
+                  resourceBlock += `    ${nestedKey} = ${JSON.stringify(nestedValue)}\n`;
+                }
+                resourceBlock += "  }\n";
+              });
+            }
+          } else {
+            resourceBlock += `  ${key} = ${JSON.stringify(value)}\n`;
+          }
+        }
+      }
+      resourceBlock += "}\n";
+      await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a+' });
+    }
+
     return 0;
-  } catch (err){
+  } catch (err) {
     console.error(err);
     return -1;
   }
