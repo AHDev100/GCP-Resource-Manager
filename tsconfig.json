@@ -1,14 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2020",                   // Target modern JavaScript features.
-    "module": "NodeNext",                // Use CommonJS for Node.js compatibility.
-    "strict": true,                      // Enable all strict type-checking options.
-    "esModuleInterop": true,             // Enable compatibility with CommonJS/ESModules.
-    "forceConsistentCasingInFileNames": true, // Ensure consistent casing in imports.
-    "skipLibCheck": true,                // Skip type-checking declaration files for performance.
-    "outDir": "./dist",                  // Compile output to the `dist` folder.
-    "rootDir": "./src"                   // Source files are under `src` folder.
-  },
-  "include": ["src/**/*"],               // Include all files in the `src` folder.
-  "exclude": ["node_modules", "dist"]    // Exclude unnecessary folders.
+    "target": "ES2020",
+    "module": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  }
 }
