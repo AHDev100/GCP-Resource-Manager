@@ -7,8 +7,10 @@
     "dev": "ts-node src/index.ts"
   },
   "dependencies": {
+    "@apollo/server": "^4.11.3",
     "commander": "^13.0.0",
     "figlet": "^1.8.0",
+    "graphql": "^16.10.0",
     "inquirer": "^12.3.0"
   },
   "devDependencies": {
