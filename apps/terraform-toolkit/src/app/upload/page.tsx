@@ -5,16 +5,26 @@ import dynamic from "next/dynamic";
 import yaml from "js-yaml"
 import toast from "react-hot-toast";
 import { gql, useMutation } from "@apollo/client";
+import { useRouter } from "next/navigation";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 const SUBMIT_CUSTOM_CONFIG = gql`
-  mutation provisionFile($config: String!, $fileType: String!){
-    provisionFile(config: $config, fileType: $fileType){
+  mutation provisionFile($config: String!, $fileType: String!, $validated: Boolean!){
+    provisionFile(config: $config, fileType: $fileType, validated: $validated){
         success
         errors
     }
   }
+`;
+
+const VALIDATE_TF = gql`
+    mutation validate($config: String!, $fileType: String!) {
+        validateFile(config: $config, fileType: $fileType){
+            isValid
+            errors
+        }
+    }
 `;
 
 export default function UploadPage() {
@@ -23,12 +33,25 @@ export default function UploadPage() {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [monacoInstance, setMonacoInstance] = useState<any>(null);
+  const [isValidated, setIsValidated] = useState<boolean>(false);
+  const [loading, setLoading] = useState<"validating" | "provisioning" | null>(null);
+  const [showResources, setShow] = useState<boolean>(true);
+
+  const router = useRouter();
 
   const [submit] = useMutation(SUBMIT_CUSTOM_CONFIG, {
     variables: {
-      config: fileContent, 
+      config: fileContent,
       fileType,
-    }
+      validated: isValidated,
+    },
+  });
+
+  const [validate] = useMutation(VALIDATE_TF, {
+    variables: {
+      config: fileContent,
+      fileType,
+    },
   });
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,56 +92,78 @@ export default function UploadPage() {
 
   const handleEditorSave = async () => {
     if (!monacoInstance) return;
-  
+
     const model = monacoInstance.editor.getModels()[0];
-    const content = model.getValue(); 
+    const content = model.getValue();
     const markers = monacoInstance.editor.getModelMarkers({ resource: model.uri });
-  
+
     if (markers.length > 0) {
       toast.error("Please fix the syntax errors in the editor before saving.");
       return;
     }
-  
+
     try {
       if (fileName?.endsWith(".json")) {
-        JSON.parse(content); 
+        JSON.parse(content);
       } else if (fileName?.endsWith(".yaml") || fileName?.endsWith(".yml")) {
-        yaml.load(content); 
+        yaml.load(content);
       }
-  
+
       setFileContent(content);
-      const { data } = await submit();
-      if (data?.provisionFile?.success){
-        toast.success("Configuration saved successfully!");
+
+      setLoading("validating");
+      const { data: validationData } = await validate();
+      if (validationData?.validateFile?.isValid) {
+        toast.success("Configuration validated successfully!");
+        setIsValidated(true);
       } else {
-          toast.custom((t) => (
-            <div
-                className={`max-w-md w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg ${
-                    t.visible ? "animate-enter" : "animate-leave"
-                }`}
-                role="alert"
-            >
-                <strong className="font-bold">Validation Failed - Try Again:</strong>
-                <ul className="mt-2 list-disc list-inside">
-                    {data?.provisionFile?.errors.map((error : any, index : any) => (
-                        <li key={index}>{error}</li>
-                    ))}
-                </ul>
-                <button
-                    onClick={() => toast.dismiss(t.id)}
-                    className="absolute top-2 right-2 text-red-700 hover:text-red-900"
-                >
-                    ✕
-                </button>
-            </div>
-          ));
+        toast.error(`Validation failed: ${validationData?.validateFile?.errors.join(", ")}`);
       }
-    } catch (err : any) {
+    } catch (err: any) {
       console.error(err);
       const errorMessage = err.message || "An unknown error occurred.";
       toast.error(`Invalid syntax in the editor:\n${errorMessage}`);
+    } finally {
+      setLoading(null);
     }
-  };  
+  };
+
+  const handleProvision = async () => {
+    try {
+      setLoading("provisioning");
+      const { data: submissionData } = await submit();
+      if (submissionData?.provisionFile?.success) {
+        toast.success("Configuration saved and provisioned successfully!");
+      } else {
+        toast.custom((t) => (
+          <div
+            className={`max-w-md w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg ${
+              t.visible ? "animate-enter" : "animate-leave"
+            }`}
+            role="alert"
+          >
+            <strong className="font-bold">Provision Failed - Try Again:</strong>
+            <ul className="mt-2 list-disc list-inside">
+              {submissionData?.provisionFile?.errors.map((error: any, index: any) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="absolute top-2 right-2 text-red-700 hover:text-red-900"
+            >
+              ✕
+            </button>
+          </div>
+        ));
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error("An error occurred during provisioning.");
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center">
@@ -179,12 +224,33 @@ export default function UploadPage() {
             />
           </div>
           <div className="flex justify-end mt-4 w-full max-w-4xl">
-            <button
-              className="bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg transition-all duration-300"
-              onClick={handleEditorSave}
-            >
-              Save Configuration
-            </button>
+            {!isValidated ? (
+              <button
+                className={`bg-blue-500 hover:bg-blue-600 text-white py-2 px-6 rounded-lg transition-all duration-300 flex items-center gap-2 ${
+                  loading === "validating" ? "cursor-not-allowed opacity-50" : ""
+                }`}
+                onClick={handleEditorSave}
+                disabled={loading === "validating"}
+              >
+                {loading === "validating" && (
+                  <span className="loader border-t-transparent border-white border-2 w-4 h-4 rounded-full animate-spin"></span>
+                )}
+                {loading === "validating" ? "Validating..." : "Validate Configuration"}
+              </button>
+            ) : (
+              <button
+                className={`bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg transition-all duration-300 flex items-center gap-2 ${
+                  loading === "provisioning" ? "cursor-not-allowed opacity-50" : ""
+                }`}
+                onClick={handleProvision}
+                disabled={loading === "provisioning"}
+              >
+                {loading === "provisioning" && (
+                  <span className="loader border-t-transparent border-white border-2 w-4 h-4 rounded-full animate-spin"></span>
+                )}
+                {loading === "provisioning" ? "Provisioning..." : "Provision Configuration"}
+              </button>
+            )}
           </div>
         </>
       )}

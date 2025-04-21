@@ -5,22 +5,19 @@ import fs from "fs";
 import yaml from "js-yaml";
 import { spawn } from 'child_process';
 
-// const gcp_provider : string = `
-//   terraform {
-//     required_providers {
-//       google = {
-//         source  = "hashicorp/google"
-//         version = "6.8.0"
-//       }
-//     }
-//   }\n
-// `;
+const gcp_provider : string = `
+  terraform {
+    required_providers { 
+      google = {
+        source  = "hashicorp/google"
+      }
+    }
+  }\n
+`;
 
 export function runTerraformCommand(command: string, args: Array<string>): Promise<void> {
-    let tf = spawn(command, args, { stdio: "pipe", shell: true }); // Use "pipe" to capture stdout and stderr
+    let tf = spawn(command, args, { stdio: "pipe", shell: true });
     return new Promise((resolve, reject) => {
-        console.log(`Running command: ${command} ${args.join(' ')}`);
-
         let stderrData = "";
 
         tf.stderr?.on("data", (data) => {
@@ -49,6 +46,7 @@ export async function generateTFYAML(data: string): Promise<void> {
 
 export async function generateTFJSON(data: string): Promise<void> {
   try {
+    await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'w' });
     const provider = JSON.parse(data).provider;
 
     let providerBlock = `provider "${provider.name}" {\n`;
@@ -57,8 +55,8 @@ export async function generateTFJSON(data: string): Promise<void> {
         providerBlock += `  ${key} = ${JSON.stringify(value)}\n`;
       }
     }
-    providerBlock += "}\n";
-    await fs.promises.writeFile('main.tf', providerBlock, { flag: 'a+' });
+    providerBlock += "}\n\n";
+    await fs.promises.writeFile('main.tf', providerBlock, { flag: 'a' });
 
     const resources = JSON.parse(data).resources;
     for (const resource of resources) {
@@ -89,7 +87,7 @@ export async function generateTFJSON(data: string): Promise<void> {
         }
       }
       resourceBlock += "}\n";
-      await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a+' });
+      await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a' });
     }
   } catch (err) {
     console.error(err);
@@ -428,4 +426,31 @@ export async function generateTFJSON(data: string): Promise<void> {
 
 //   const result = await generateTFYAML(yamlTestData);
 //   console.log('Conversion result:', result === 0 ? 'Success' : 'Failure');
+// })();
+
+// (async () => {
+//   try {
+//     // Path to the test.json file
+//     const testFilePath = 'C:\\Users\\arun1\\Cloud-Migration-Toolkit\\test.json';
+
+//     // Check if the file exists
+//     if (!fs.existsSync(testFilePath)) {
+//       console.error(`File not found: ${testFilePath}`);
+//       return;
+//     }
+
+//     // Read the content of the test.json file
+//     const testFileContent = await fs.promises.readFile(testFilePath, 'utf-8');
+
+//     // Parse the JSON content
+//     const parsedContent = JSON.parse(testFileContent);
+
+//     // Call generateTFJSON with the parsed content
+//     console.log('Generating Terraform configuration from test.json...');
+//     await generateTFJSON(JSON.stringify(parsedContent));
+
+//     console.log('Terraform configuration generated successfully!');
+//   } catch (err) {
+//     console.error('An error occurred while testing generateTFJSON:', err);
+//   }
 // })();

@@ -1,0 +1,18 @@
+{
+    "provider": {
+      "name": "google",
+      "project": "terraform-project-445721",
+      "region": "us-central1",
+      "zone": "us-central1-c"
+    },
+    "resources": [
+      {
+        "type": "google_compute_network",
+        "name": "vpc_network",
+        "properties": {
+          "name": "terraform-network"
+        }
+      }
+    ]
+}
+  

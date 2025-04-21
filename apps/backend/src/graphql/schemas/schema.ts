@@ -12,7 +12,8 @@ const typeDefs = `#graphql
     type Mutation {
         validateConfig(config: String!): Valid!
         viewPlan(config: String!): String!
-        provisionFile(config: String!, fileType: String!): Status!
+        validateFile(config: String!, fileType: String!): Valid!
+        provisionFile(config: String!, fileType: String!, validated: Boolean!): Status!
         provisionForm(blocks: [String]!): Boolean!
         provisionCode(code: String!): Boolean!
     }
