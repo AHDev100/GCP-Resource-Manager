@@ -103,7 +103,7 @@ export default function EditorPage() {
             <h1 className="text-4xl font-bold mb-4 text-center">
                 Welcome to the Editor Page
             </h1>
-            <p className="text-lg text-center mb-4 max-w-2xl">
+            <p className="text-lg text-center mb-6 max-w-2xl">
                 Craft your custom Terraform configurations effortlessly! Use our intuitive Form Editor for a guided experience or dive into the Standard Editor for full control. The choice is yours!
             </p>
 

@@ -4,19 +4,21 @@ const typeDefs = `#graphql
         errors: [String]!
     }
 
+    type Status {
+        success: Boolean!
+        errors: [String]!
+    }
+
     type Mutation {
         validateConfig(config: String!): Valid!
-        provisionFile(config: String!, fileType: String!): Boolean!
+        viewPlan(config: String!): String!
+        provisionFile(config: String!, fileType: String!): Status!
         provisionForm(blocks: [String]!): Boolean!
         provisionCode(code: String!): Boolean!
     }
 
     type Query {
         getResources: [String]!
-    }
-
-    type Subscription {
-        logTerraform(command: String!): String!
     }
 `;
 

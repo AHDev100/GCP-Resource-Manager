@@ -1,19 +1,20 @@
-import figlet from "figlet";
-import { OptionValues, program } from "commander";
+// import figlet from "figlet";
+// import { OptionValues, program } from "commander";
 import fs from "fs";
-import inquirer from "inquirer";
+// import inquirer from "inquirer";
+import yaml from "js-yaml";
 import { spawn } from 'child_process';
 
-const gcp_provider : string = `
-  terraform {
-    required_providers {
-      google = {
-        source  = "hashicorp/google"
-        version = "6.8.0"
-      }
-    }
-  }\n
-`;
+// const gcp_provider : string = `
+//   terraform {
+//     required_providers {
+//       google = {
+//         source  = "hashicorp/google"
+//         version = "6.8.0"
+//       }
+//     }
+//   }\n
+// `;
 
 export function runTerraformCommand(command: string, args: Array<string>): Promise<void> {
     let tf = spawn(command, args, { stdio: "pipe", shell: true }); // Use "pipe" to capture stdout and stderr
@@ -27,8 +28,6 @@ export function runTerraformCommand(command: string, args: Array<string>): Promi
         });
 
         tf.on("close", (code) => {
-            console.log(`Command completed: ${command} ${args.join(' ')} with exit code ${code}`);
-
             if (code === 0) {
                 resolve();
             } else {
@@ -38,282 +37,19 @@ export function runTerraformCommand(command: string, args: Array<string>): Promi
     });
 }
 
-async function spawnTerraformLifeCycle(){
+export async function generateTFYAML(data: string): Promise<void> {
   try {
-    await runTerraformCommand("terraform", ["fmt"]);
-    await runTerraformCommand("terraform", ["init"]);
-    await runTerraformCommand("terraform", ["validate"]);
-    await runTerraformCommand("terraform", ["apply"]);
+    const parsedData = yaml.load(data);
+    const jsonContent = JSON.stringify(parsedData, null, 2);
+    await generateTFJSON(jsonContent);
   } catch (err) {
-    err && console.error(err);
-  }
-}
-
-async function handleNestedBlock(blockName: string, indentLevel: number) : Promise<string> {
-  let block : string = `${" ".repeat(indentLevel)} ${blockName} {\n`;
-  
-  let addFieldOrBlock : boolean = true; 
-
-  while(addFieldOrBlock){
-    const blockField = await inquirer.prompt([
-      {
-        type: "list", 
-        name: "fieldType", 
-        message: "What would you like to specify in the block?",
-        choices: ["Key-Value Pair", "Nested Block", "Done With Block"]
-      }
-    ]);
-
-    if (blockField.fieldType == "Key-Value Pair"){
-      const kvpair = await inquirer.prompt([
-        {
-          type: "input",
-          name: "key",
-          message: "Enter the key: "
-        },
-        {
-          type: "input",
-          name: "value",
-          message: "Enter the value"
-        }
-      ]);
-
-      block += `  ${kvpair.key} = ${kvpair.value}\n`;
-    } else if (blockField.fieldType == "Nested Block"){
-      const nestedBlockAnswers = await inquirer.prompt([
-        {
-          type: "input",
-          name: "nestedBlockName",
-          message: "Enter the name of the nested block:",
-        },
-      ]);
-
-      block += await handleNestedBlock(nestedBlockAnswers.nestedBlockName, indentLevel + 1);
-    } else {
-      addFieldOrBlock = false;
-    }
-  }
-
-  block += `${"  ".repeat(indentLevel)}}\n`;
-  return block;
-}
-
-async function handleResource() : Promise<void> {
-  let addResource : boolean = true;
-    
-  while (addResource){
-    const resourcePrompt = await inquirer.prompt([
-      {
-        type: "input",
-        name: "resourceType",
-        message: "Enter the resource type"
-      }, 
-      {
-        type: "input",
-        name: "resourceName",
-        message: "Enter a name for the resource"
-      }
-    ]);
-    
-    let resourceBlock = `\nresource \"${resourcePrompt.resourceType}\" \"${resourcePrompt.resourceName}\" {\n`;
-
-    let addFieldOrBlock : boolean = true; 
-
-    while(addFieldOrBlock){
-      const resourceField = await inquirer.prompt([
-        {
-          type: "list", 
-          name: "fieldType", 
-          message: "What would you like to specify in the resource?",
-          choices: ["Key-Value Pair", "Nested Block", "Done With Resource"]
-        }
-      ]);
-
-      if (resourceField.fieldType == "Key-Value Pair"){
-        const kvpair = await inquirer.prompt([
-          {
-            type: "input",
-            name: "key",
-            message: "Enter the key: "
-          },
-          {
-            type: "input",
-            name: "value",
-            message: "Enter the value"
-          }
-        ]);
-
-        resourceBlock += `  ${kvpair.key} = ${kvpair.value}\n`; 
-      } else if (resourceField.fieldType == "Nested Block"){
-        const nestedBlock = await inquirer.prompt([
-          {
-            type: "input",
-            name: "name",
-            message: "Enter the name for the nested block"
-          }
-        ]);
-        
-        resourceBlock += await handleNestedBlock(nestedBlock.name, 2);
-      } else {
-        addFieldOrBlock = false;
-      }
-    }
-
-    resourceBlock += "}\n";
-
-    // console.log(resourceBlock);
-
-    await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a+' });
-
-    const continueResources = await inquirer.prompt([
-      {
-        type: "confirm",
-        name: "yes",
-        message: "Do you want to add another resource?",
-        default: false
-      }
-    ]);
-
-    addResource = continueResources.yes;
-  }
-}
-
-async function generateTFManual() : Promise<Number> {
-  try {
-    let addBlock : boolean = true;
-
-    while(addBlock){
-      const blockType = await inquirer.prompt([
-        {
-          type: "list", 
-          name: "fieldType", 
-          message: "What block would you like to add?",
-          choices: ["Provider", "Resource", "Output", "Done"]
-        }
-      ]);
-
-      if (blockType.fieldType == "Provider"){
-        const provider = await inquirer.prompt([
-          {
-            type: "input",
-            name: "name",
-            message: "Enter the provider name"
-          }
-        ]);
-
-        let providerBlock = ` provider ${provider.name} {\n`;
-
-        let collectProducerKVs : boolean = true; 
-
-        while (collectProducerKVs){
-          const ready = await inquirer.prompt([
-            {
-              type: "list",
-              name: "yes",
-              message: "Do you have a key and value to provide for the block?",
-              choices: ["Yes", "No"]
-            }
-          ]);
-
-          if (ready.yes == "Yes"){
-            const kvpair = await inquirer.prompt([
-              {
-                type: "input",
-                name: "key",
-                message: "Enter the key: "
-              },
-              {
-                type: "input",
-                name: "value",
-                message: "Enter the value"
-              }
-            ]);
-
-            providerBlock += `  ${kvpair.key} = ${kvpair.value}\n`; 
-          } else {
-            collectProducerKVs = false; 
-          }
-        }
-
-        providerBlock += "}\n";
-        await fs.promises.writeFile('main.tf', providerBlock, { flag: 'a+' });
-      } else if (blockType.fieldType == "Resource"){
-        await handleResource();
-      } else if (blockType.fieldType == "Output"){
-        let addOutput : boolean = true; 
-        
-        while(addOutput){
-          const output = await inquirer.prompt([
-            {
-              type: "input",
-              name: "name",
-              message: "Provide the name for the output"
-            }
-          ]);
-  
-          let outputBlock = `output \"${output.name}\" {\n`; 
-  
-          let addOutputKVPs : boolean = true; 
-
-          while(addOutputKVPs){
-            const kvpair = await inquirer.prompt([
-              {
-                type: "input",
-                name: "key",
-                message: "Enter Key:"
-              },
-              {
-                type: "input",
-                name: "value",
-                message: "Enter Value:"
-              }
-            ]);
-
-            outputBlock += `  ${kvpair.key} = ${kvpair.value}\n`;
-
-            const continueOutputKVPs = await inquirer.prompt([
-              {
-                type: "confirm",
-                name: "yes",
-                message: "Do you want to add another value?",
-                default: false
-              }
-            ]);
-
-            addOutputKVPs = continueOutputKVPs.yes;
-          }
-
-          outputBlock += "}\n";
-
-          await fs.promises.writeFile('outputs.tf', outputBlock, { flag: 'a+' });
-  
-          const continueOutputs = await inquirer.prompt([
-            {
-              type: "confirm",
-              name: "yes",
-              message: "Do you want to add another output?",
-              default: false
-            }
-          ]);
-
-          addOutput = continueOutputs.yes;
-        }
-      } else {
-        addBlock = false; 
-      }
-    }
-
-    return 0;
-  } catch (err){
     console.error(err);
-    return -1;
   }
 }
 
-async function generateTFJSON(filepath: string): Promise<number> {
+export async function generateTFJSON(data: string): Promise<void> {
   try {
-    const data = JSON.parse((await fs.promises.readFile(filepath, "utf-8")));
-    const provider = data.provider;
+    const provider = JSON.parse(data).provider;
 
     let providerBlock = `provider "${provider.name}" {\n`;
     for (const [key, value] of Object.entries(provider)) {
@@ -324,7 +60,7 @@ async function generateTFJSON(filepath: string): Promise<number> {
     providerBlock += "}\n";
     await fs.promises.writeFile('main.tf', providerBlock, { flag: 'a+' });
 
-    const resources = data.resources;
+    const resources = JSON.parse(data).resources;
     for (const resource of resources) {
       let resourceBlock = `resource "${resource.type}" "${resource.name}" {\n`;
       for (const [key, value] of Object.entries(resource.properties)) {
@@ -355,55 +91,341 @@ async function generateTFJSON(filepath: string): Promise<number> {
       resourceBlock += "}\n";
       await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a+' });
     }
-
-    return 0;
   } catch (err) {
     console.error(err);
-    return -1;
   }
 }
 
-console.log(figlet.textSync("Cloud Migration Toolkit"));
+// async function spawnTerraformLifeCycle(){
+//   try {
+//     await runTerraformCommand("terraform", ["fmt"]);
+//     await runTerraformCommand("terraform", ["init"]);
+//     await runTerraformCommand("terraform", ["validate"]);
+//     await runTerraformCommand("terraform", ["apply"]);
+//   } catch (err) {
+//     err && console.error(err);
+//   }
+// }
 
-// console.log(gcp_provider);
+// async function handleNestedBlock(blockName: string, indentLevel: number) : Promise<string> {
+//   let block : string = `${" ".repeat(indentLevel)} ${blockName} {\n`;
+  
+//   let addFieldOrBlock : boolean = true; 
 
-type cli_arg = string | undefined;
+//   while(addFieldOrBlock){
+//     const blockField = await inquirer.prompt([
+//       {
+//         type: "list", 
+//         name: "fieldType", 
+//         message: "What would you like to specify in the block?",
+//         choices: ["Key-Value Pair", "Nested Block", "Done With Block"]
+//       }
+//     ]);
 
-program
-  .name("Cloud Migration Toolkit")
-  .description("Automate Infrastructure Creation/Management from CLI")
-  .version("0.0.1");
+//     if (blockField.fieldType == "Key-Value Pair"){
+//       const kvpair = await inquirer.prompt([
+//         {
+//           type: "input",
+//           name: "key",
+//           message: "Enter the key: "
+//         },
+//         {
+//           type: "input",
+//           name: "value",
+//           message: "Enter the value"
+//         }
+//       ]);
 
-program
-  .option("-r, --read <jsonFilepath>", "reads the config defined in the provided JSON file")
-  .option("-m, --manual", "provide the configuration blocks and values manually")
-  .action(async () => {
-    const options = program.opts<OptionValues>();
-    const filepath : cli_arg = options.read;
-    if (filepath && filepath.length) {
-      // console.log("Read file:", filepath);
-      if (fs.existsSync(filepath)){
-        /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
-        await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
-        await generateTFJSON(filepath);
-        await spawnTerraformLifeCycle();
-      } else {
-        console.error("File", filepath, "not found :(");
-      }
-    } else if (options.manual) {
-      // console.log("We're in manual mode");
-      /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
-      await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
-      await generateTFManual();
-      await spawnTerraformLifeCycle(); // TODO: Give option to destroy resources immediately after
-        // .then(async () => {
-        //   await inquirer.prompt([
+//       block += `  ${kvpair.key} = ${kvpair.value}\n`;
+//     } else if (blockField.fieldType == "Nested Block"){
+//       const nestedBlockAnswers = await inquirer.prompt([
+//         {
+//           type: "input",
+//           name: "nestedBlockName",
+//           message: "Enter the name of the nested block:",
+//         },
+//       ]);
 
-        //   ]);
-        // });
-    } else {
-      console.error("No valid option provided.");
-    }
-  });
+//       block += await handleNestedBlock(nestedBlockAnswers.nestedBlockName, indentLevel + 1);
+//     } else {
+//       addFieldOrBlock = false;
+//     }
+//   }
 
-program.parse(process.argv);
+//   block += `${"  ".repeat(indentLevel)}}\n`;
+//   return block;
+// }
+
+// async function handleResource() : Promise<void> {
+//   let addResource : boolean = true;
+    
+//   while (addResource){
+//     const resourcePrompt = await inquirer.prompt([
+//       {
+//         type: "input",
+//         name: "resourceType",
+//         message: "Enter the resource type"
+//       }, 
+//       {
+//         type: "input",
+//         name: "resourceName",
+//         message: "Enter a name for the resource"
+//       }
+//     ]);
+    
+//     let resourceBlock = `\nresource \"${resourcePrompt.resourceType}\" \"${resourcePrompt.resourceName}\" {\n`;
+
+//     let addFieldOrBlock : boolean = true; 
+
+//     while(addFieldOrBlock){
+//       const resourceField = await inquirer.prompt([
+//         {
+//           type: "list", 
+//           name: "fieldType", 
+//           message: "What would you like to specify in the resource?",
+//           choices: ["Key-Value Pair", "Nested Block", "Done With Resource"]
+//         }
+//       ]);
+
+//       if (resourceField.fieldType == "Key-Value Pair"){
+//         const kvpair = await inquirer.prompt([
+//           {
+//             type: "input",
+//             name: "key",
+//             message: "Enter the key: "
+//           },
+//           {
+//             type: "input",
+//             name: "value",
+//             message: "Enter the value"
+//           }
+//         ]);
+
+//         resourceBlock += `  ${kvpair.key} = ${kvpair.value}\n`; 
+//       } else if (resourceField.fieldType == "Nested Block"){
+//         const nestedBlock = await inquirer.prompt([
+//           {
+//             type: "input",
+//             name: "name",
+//             message: "Enter the name for the nested block"
+//           }
+//         ]);
+        
+//         resourceBlock += await handleNestedBlock(nestedBlock.name, 2);
+//       } else {
+//         addFieldOrBlock = false;
+//       }
+//     }
+
+//     resourceBlock += "}\n";
+
+//     // console.log(resourceBlock);
+
+//     await fs.promises.writeFile('main.tf', resourceBlock, { flag: 'a+' });
+
+//     const continueResources = await inquirer.prompt([
+//       {
+//         type: "confirm",
+//         name: "yes",
+//         message: "Do you want to add another resource?",
+//         default: false
+//       }
+//     ]);
+
+//     addResource = continueResources.yes;
+//   }
+// }
+
+// async function generateTFManual() : Promise<Number> {
+//   try {
+//     let addBlock : boolean = true;
+
+//     while(addBlock){
+//       const blockType = await inquirer.prompt([
+//         {
+//           type: "list", 
+//           name: "fieldType", 
+//           message: "What block would you like to add?",
+//           choices: ["Provider", "Resource", "Output", "Done"]
+//         }
+//       ]);
+
+//       if (blockType.fieldType == "Provider"){
+//         const provider = await inquirer.prompt([
+//           {
+//             type: "input",
+//             name: "name",
+//             message: "Enter the provider name"
+//           }
+//         ]);
+
+//         let providerBlock = ` provider ${provider.name} {\n`;
+
+//         let collectProducerKVs : boolean = true; 
+
+//         while (collectProducerKVs){
+//           const ready = await inquirer.prompt([
+//             {
+//               type: "list",
+//               name: "yes",
+//               message: "Do you have a key and value to provide for the block?",
+//               choices: ["Yes", "No"]
+//             }
+//           ]);
+
+//           if (ready.yes == "Yes"){
+//             const kvpair = await inquirer.prompt([
+//               {
+//                 type: "input",
+//                 name: "key",
+//                 message: "Enter the key: "
+//               },
+//               {
+//                 type: "input",
+//                 name: "value",
+//                 message: "Enter the value"
+//               }
+//             ]);
+
+//             providerBlock += `  ${kvpair.key} = ${kvpair.value}\n`; 
+//           } else {
+//             collectProducerKVs = false; 
+//           }
+//         }
+
+//         providerBlock += "}\n";
+//         await fs.promises.writeFile('main.tf', providerBlock, { flag: 'a+' });
+//       } else if (blockType.fieldType == "Resource"){
+//         await handleResource();
+//       } else if (blockType.fieldType == "Output"){
+//         let addOutput : boolean = true; 
+        
+//         while(addOutput){
+//           const output = await inquirer.prompt([
+//             {
+//               type: "input",
+//               name: "name",
+//               message: "Provide the name for the output"
+//             }
+//           ]);
+  
+//           let outputBlock = `output \"${output.name}\" {\n`; 
+  
+//           let addOutputKVPs : boolean = true; 
+
+//           while(addOutputKVPs){
+//             const kvpair = await inquirer.prompt([
+//               {
+//                 type: "input",
+//                 name: "key",
+//                 message: "Enter Key:"
+//               },
+//               {
+//                 type: "input",
+//                 name: "value",
+//                 message: "Enter Value:"
+//               }
+//             ]);
+
+//             outputBlock += `  ${kvpair.key} = ${kvpair.value}\n`;
+
+//             const continueOutputKVPs = await inquirer.prompt([
+//               {
+//                 type: "confirm",
+//                 name: "yes",
+//                 message: "Do you want to add another value?",
+//                 default: false
+//               }
+//             ]);
+
+//             addOutputKVPs = continueOutputKVPs.yes;
+//           }
+
+//           outputBlock += "}\n";
+
+//           await fs.promises.writeFile('outputs.tf', outputBlock, { flag: 'a+' });
+  
+//           const continueOutputs = await inquirer.prompt([
+//             {
+//               type: "confirm",
+//               name: "yes",
+//               message: "Do you want to add another output?",
+//               default: false
+//             }
+//           ]);
+
+//           addOutput = continueOutputs.yes;
+//         }
+//       } else {
+//         addBlock = false; 
+//       }
+//     }
+
+//     return 0;
+//   } catch (err){
+//     console.error(err);
+//     return -1;
+//   }
+// }
+
+// console.log(figlet.textSync("Cloud Migration Toolkit"));
+
+// // console.log(gcp_provider);
+
+// type cli_arg = string | undefined;
+
+// program
+//   .name("Cloud Migration Toolkit")
+//   .description("Automate Infrastructure Creation/Management from CLI")
+//   .version("0.0.1");
+
+// program
+//   .option("-r, --read <jsonFilepath>", "reads the config defined in the provided JSON file")
+//   .option("-m, --manual", "provide the configuration blocks and values manually")
+//   .action(async () => {
+//     const options = program.opts<OptionValues>();
+//     const filepath : cli_arg = options.read;
+//     if (filepath && filepath.length) {
+//       // console.log("Read file:", filepath);
+//       if (fs.existsSync(filepath)){
+//         /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
+//         await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
+//         await generateTFJSON(filepath);
+//         await spawnTerraformLifeCycle();
+//       } else {
+//         console.error("File", filepath, "not found :(");
+//       }
+//     } else if (options.manual) {
+//       // console.log("We're in manual mode");
+//       /* For time being, we're just gonna be using GCP, so just write that terraform block for the time being - gotta be careful to make sure the block isn't written again tho */
+//       await fs.promises.writeFile('main.tf', gcp_provider, { flag: 'a+' });
+//       await generateTFManual();
+//       await spawnTerraformLifeCycle(); // TODO: Give option to destroy resources immediately after
+//         // .then(async () => {
+//         //   await inquirer.prompt([
+
+//         //   ]);
+//         // });
+//     } else {
+//       console.error("No valid option provided.");
+//     }
+//   });
+
+// program.parse(process.argv);
+
+// (async () => {
+//   const yamlTestData = `
+// provider:
+//   name: aws
+//   region: us-east-1
+// resources:
+//   - type: aws_instance
+//     name: example
+//     properties:
+//       ami: ami-0c55b159cbfafe1f0
+//       instance_type: t2.micro
+// `;
+
+//   const result = await generateTFYAML(yamlTestData);
+//   console.log('Conversion result:', result === 0 ? 'Success' : 'Failure');
+// })();

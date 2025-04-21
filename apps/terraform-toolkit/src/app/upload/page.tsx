@@ -4,14 +4,32 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import yaml from "js-yaml"
 import toast from "react-hot-toast";
+import { gql, useMutation } from "@apollo/client";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
+const SUBMIT_CUSTOM_CONFIG = gql`
+  mutation provisionFile($config: String!, $fileType: String!){
+    provisionFile(config: $config, fileType: $fileType){
+        success
+        errors
+    }
+  }
+`;
+
 export default function UploadPage() {
   const [fileName, setFileName] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<"JSON" | "YAML" | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [monacoInstance, setMonacoInstance] = useState<any>(null);
+
+  const [submit] = useMutation(SUBMIT_CUSTOM_CONFIG, {
+    variables: {
+      config: fileContent, 
+      fileType,
+    }
+  });
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -33,8 +51,10 @@ export default function UploadPage() {
           const content = readerEvent.target.result as string;
           try {
             if (file.name.endsWith(".json")) {
+              setFileType("JSON");
               JSON.parse(content); 
             } else if (file.name.endsWith(".yaml") || file.name.endsWith(".yml")) {
+              setFileType("YAML");
               yaml.load(content);
             }
             setFileContent(content); 
@@ -47,7 +67,7 @@ export default function UploadPage() {
     }
   };
 
-  const handleEditorSave = () => {
+  const handleEditorSave = async () => {
     if (!monacoInstance) return;
   
     const model = monacoInstance.editor.getModels()[0];
@@ -67,9 +87,36 @@ export default function UploadPage() {
       }
   
       setFileContent(content);
-      toast.success("Configuration saved successfully!");
-    } catch (err) {
-      toast.error("Invalid syntax in the editor. Please fix it before saving.");
+      const { data } = await submit();
+      if (data?.provisionFile?.success){
+        toast.success("Configuration saved successfully!");
+      } else {
+          toast.custom((t) => (
+            <div
+                className={`max-w-md w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg ${
+                    t.visible ? "animate-enter" : "animate-leave"
+                }`}
+                role="alert"
+            >
+                <strong className="font-bold">Validation Failed - Try Again:</strong>
+                <ul className="mt-2 list-disc list-inside">
+                    {data?.provisionFile?.errors.map((error : any, index : any) => (
+                        <li key={index}>{error}</li>
+                    ))}
+                </ul>
+                <button
+                    onClick={() => toast.dismiss(t.id)}
+                    className="absolute top-2 right-2 text-red-700 hover:text-red-900"
+                >
+                    ✕
+                </button>
+            </div>
+          ));
+      }
+    } catch (err : any) {
+      console.error(err);
+      const errorMessage = err.message || "An unknown error occurred.";
+      toast.error(`Invalid syntax in the editor:\n${errorMessage}`);
     }
   };  
 
