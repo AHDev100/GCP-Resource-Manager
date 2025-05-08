@@ -34,6 +34,48 @@ export function runTerraformCommand(command: string, args: Array<string>): Promi
     });
 }
 
+export function runTerraformPlan(): Promise<string> {
+  let tf = spawn("terraform plan", { stdio: "pipe", shell: true });
+  return new Promise((resolve, reject) => {
+    let plan = "";
+
+    tf.stdout.on("data", (data) => {
+      plan += data.toString(); 
+    });
+
+    tf.on("close", (code) => {
+      if (code == 0){
+        resolve(plan);
+      } else {
+        reject(new Error(`Operation failed with status code ${code}`));
+      }
+    }); 
+  });
+}
+
+export function runTerraformShow(): Promise<string> {
+  let tf = spawn("terraform show", { stdio: "pipe", shell: true });
+  return new Promise((resolve, reject) => {
+    let resources = "";
+
+    tf.stdout.on("data", (data) => {
+      resources += data.toString(); 
+    });
+
+    tf.on("close", (code) => {
+      if (code == 0){
+        if (resources == "The state file is empty. No resources are represented."){
+          reject(new Error(resources)); 
+        } else {
+          resolve(resources); 
+        }
+      } else {
+        reject(new Error(`Operation failed with status code ${code}`));
+      }
+    }); 
+  });
+}
+
 export async function generateTFYAML(data: string): Promise<void> {
   try {
     const parsedData = yaml.load(data);

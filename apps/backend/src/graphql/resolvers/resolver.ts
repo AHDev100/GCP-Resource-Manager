@@ -1,5 +1,7 @@
-import { generateTFYAML, generateTFJSON, runTerraformCommand } from "../../utils/cli";
+import { generateTFYAML, generateTFJSON, runTerraformCommand, runTerraformShow, runTerraformPlan } from "../../utils/cli";
 import fs from 'fs';
+
+const stripAnsi = (str: string) => str.replace(/\u001b(?:\[\d{1,2}(?:;\d{1,2})*m|[A-Za-z])/g, '');
 
 const resolvers = {
     Mutation: {
@@ -12,7 +14,6 @@ const resolvers = {
                 return { isValid: true, errors: [] };
             } catch (error: any) {
                 await fs.promises.writeFile('main.tf', '', { flag: 'w' });
-                const stripAnsi = (str: string) => str.replace(/\u001b\[.*?m/g, '');
                 const errorMessage = stripAnsi(error.message || 'Unknown error occurred during validation');
                 return { isValid: false, errors: [errorMessage] };
             }
@@ -30,13 +31,9 @@ const resolvers = {
                 return { isValid: true, errors: [] };
             } catch (error: any) {
                 await fs.promises.writeFile('main.tf', '', { flag: 'w' });
-                const stripAnsi = (str: string) => str.replace(/\u001b\[.*?m/g, '');
                 const errorMessage = stripAnsi(error.message || 'Unknown error occurred during validation');
                 return { isValid: false, errors: [errorMessage] };
             }
-        },
-        viewPlan: async (_ : any, { config } : { config: string }) : Promise<{}> => {
-            return {}
         }, 
         provisionFile: async (_: any, { config, fileType, validated } : { config: string, fileType: string, validated: boolean }) : Promise<{ success: boolean; errors: string[] }> => {
             try {
@@ -48,10 +45,9 @@ const resolvers = {
                     }
                 }
                 await runTerraformCommand('terraform', ['apply', '-auto-approve']);
-                console.log("SUCCESS IN APPLYING");
+                // console.log("SUCCESS IN APPLYING");
                 return { success: true, errors: [] };
             } catch (error : any) {
-                const stripAnsi = (str: string) => str.replace(/\u001b\[.*?m/g, '');
                 const errorMessage = stripAnsi(error.message || 'Unknown error occurred during validation');
                 return { success: false, errors: [errorMessage] }
             }
@@ -64,9 +60,24 @@ const resolvers = {
         }, 
     }, 
     Query: {
-        getResources: () => {
-
-        }
+        getResources: async () : Promise<string> => {
+            try {
+                const resources = await runTerraformShow();
+                return stripAnsi(resources);
+            } catch (error: any) {
+                const errorMessage = error.message; 
+                return errorMessage; 
+            }
+        }, 
+        viewPlan: async () : Promise<string> => {
+            try {
+                const plan = await runTerraformPlan();
+                return stripAnsi(plan);
+            } catch (error: any){
+                const errorMessage = error.message; 
+                return errorMessage;
+            }
+        },
     },  
 }; 
 

@@ -1,30 +1,42 @@
 'use client';
 
-import { useState } from "react";
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
-import yaml from "js-yaml"
+import yaml from "js-yaml";
 import toast from "react-hot-toast";
-import { gql, useMutation } from "@apollo/client";
+import { gql, useMutation, useLazyQuery } from "@apollo/client";
 import { useRouter } from "next/navigation";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 const SUBMIT_CUSTOM_CONFIG = gql`
-  mutation provisionFile($config: String!, $fileType: String!, $validated: Boolean!){
-    provisionFile(config: $config, fileType: $fileType, validated: $validated){
-        success
-        errors
+  mutation provisionFile($config: String!, $fileType: String!, $validated: Boolean!) {
+    provisionFile(config: $config, fileType: $fileType, validated: $validated) {
+      success
+      errors
     }
   }
 `;
 
 const VALIDATE_TF = gql`
-    mutation validate($config: String!, $fileType: String!) {
-        validateFile(config: $config, fileType: $fileType){
-            isValid
-            errors
-        }
+  mutation validate($config: String!, $fileType: String!) {
+    validateFile(config: $config, fileType: $fileType) {
+      isValid
+      errors
     }
+  }
+`;
+
+const VIEW_PLAN = gql`
+  query viewPlan {
+    viewPlan
+  }
+`;
+
+const GET_RESOURCES = gql`
+  query getResources {
+    getResources
+  }
 `;
 
 export default function UploadPage() {
@@ -34,8 +46,9 @@ export default function UploadPage() {
   const [showEditor, setShowEditor] = useState(false);
   const [monacoInstance, setMonacoInstance] = useState<any>(null);
   const [isValidated, setIsValidated] = useState<boolean>(false);
-  const [loading, setLoading] = useState<"validating" | "provisioning" | null>(null);
-  const [showResources, setShow] = useState<boolean>(true);
+  const [loading, setLoading] = useState<"validating" | "provisioning" | "viewingPlan" | null>(null);
+  const [plan, setPlan] = useState<string | null>(null); 
+  const [showModal, setShowModal] = useState<boolean>(false); 
 
   const router = useRouter();
 
@@ -53,6 +66,10 @@ export default function UploadPage() {
       fileType,
     },
   });
+
+  const [getPlan] = useLazyQuery(VIEW_PLAN);
+
+  const [getResources] = useLazyQuery(GET_RESOURCES); 
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -135,31 +152,30 @@ export default function UploadPage() {
       if (submissionData?.provisionFile?.success) {
         toast.success("Configuration saved and provisioned successfully!");
       } else {
-        toast.custom((t) => (
-          <div
-            className={`max-w-md w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg ${
-              t.visible ? "animate-enter" : "animate-leave"
-            }`}
-            role="alert"
-          >
-            <strong className="font-bold">Provision Failed - Try Again:</strong>
-            <ul className="mt-2 list-disc list-inside">
-              {submissionData?.provisionFile?.errors.map((error: any, index: any) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-            <button
-              onClick={() => toast.dismiss(t.id)}
-              className="absolute top-2 right-2 text-red-700 hover:text-red-900"
-            >
-              ✕
-            </button>
-          </div>
-        ));
+        toast.error("Provisioning failed.");
       }
     } catch (err: any) {
       console.error(err);
       toast.error("An error occurred during provisioning.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleViewPlan = async () => {
+    try {
+      setLoading("viewingPlan");
+      const { data } = await getPlan();
+      if (data?.viewPlan) {
+        toast.success("Terraform plan fetched successfully!");
+        setPlan(data.viewPlan); 
+        setShowModal(true);
+      } else {
+        toast.error("Failed to fetch the Terraform plan.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error("An error occurred while fetching the Terraform plan.");
     } finally {
       setLoading(null);
     }
@@ -223,7 +239,7 @@ export default function UploadPage() {
               }}
             />
           </div>
-          <div className="flex justify-end mt-4 w-full max-w-4xl">
+          <div className="flex justify-end mt-4 w-full max-w-4xl gap-4">
             {!isValidated ? (
               <button
                 className={`bg-blue-500 hover:bg-blue-600 text-white py-2 px-6 rounded-lg transition-all duration-300 flex items-center gap-2 ${
@@ -238,21 +254,57 @@ export default function UploadPage() {
                 {loading === "validating" ? "Validating..." : "Validate Configuration"}
               </button>
             ) : (
-              <button
-                className={`bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg transition-all duration-300 flex items-center gap-2 ${
-                  loading === "provisioning" ? "cursor-not-allowed opacity-50" : ""
-                }`}
-                onClick={handleProvision}
-                disabled={loading === "provisioning"}
-              >
-                {loading === "provisioning" && (
-                  <span className="loader border-t-transparent border-white border-2 w-4 h-4 rounded-full animate-spin"></span>
-                )}
-                {loading === "provisioning" ? "Provisioning..." : "Provision Configuration"}
-              </button>
+              <>
+                <button
+                  className={`bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-6 rounded-lg transition-all duration-300 ${
+                    loading === "viewingPlan" ? "cursor-not-allowed opacity-50" : ""
+                  }`}
+                  onClick={handleViewPlan}
+                  disabled={loading === "viewingPlan"}
+                >
+                  {loading === "viewingPlan" ? "Fetching Plan..." : "View Plan"}
+                </button>
+                <button
+                  className={`bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg transition-all duration-300 ${
+                    loading === "provisioning" ? "cursor-not-allowed opacity-50" : ""
+                  }`}
+                  onClick={handleProvision}
+                  disabled={loading === "provisioning"}
+                >
+                  {loading === "provisioning" ? "Provisioning..." : "Provision Configuration"}
+                </button>
+              </>
             )}
           </div>
         </>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 text-white p-6 rounded-lg w-3/4 max-w-4xl">
+            <h2 className="text-2xl font-bold mb-4">Terraform Plan</h2>
+            <pre className="bg-gray-900 p-4 rounded-lg overflow-auto max-h-96 whitespace-pre-wrap">
+              {plan}
+            </pre>
+            <div className="flex justify-end gap-4 mt-4">
+              <button
+                className="bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg"
+                onClick={() => {
+                  setShowModal(false);
+                  handleProvision();
+                }}
+              >
+                Provision
+              </button>
+              <button
+                className="bg-red-500 hover:bg-red-600 text-white py-2 px-6 rounded-lg"
+                onClick={() => setShowModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

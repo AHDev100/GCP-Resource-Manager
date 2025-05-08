@@ -11,7 +11,6 @@ const typeDefs = `#graphql
 
     type Mutation {
         validateConfig(config: String!): Valid!
-        viewPlan(config: String!): String!
         validateFile(config: String!, fileType: String!): Valid!
         provisionFile(config: String!, fileType: String!, validated: Boolean!): Status!
         provisionForm(blocks: [String]!): Boolean!
@@ -19,7 +18,8 @@ const typeDefs = `#graphql
     }
 
     type Query {
-        getResources: [String]!
+        getResources: String!
+        viewPlan: String!
     }
 `;
 
