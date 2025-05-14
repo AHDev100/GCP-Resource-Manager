@@ -80,6 +80,7 @@ export async function generateTFYAML(data: string): Promise<void> {
   try {
     const parsedData = yaml.load(data);
     const jsonContent = JSON.stringify(parsedData, null, 2);
+    console.log(jsonContent);
     await generateTFJSON(jsonContent);
   } catch (err) {
     console.error(err);
@@ -454,20 +455,30 @@ export async function generateTFJSON(data: string): Promise<void> {
 // program.parse(process.argv);
 
 // (async () => {
-//   const yamlTestData = `
-// provider:
-//   name: aws
-//   region: us-east-1
-// resources:
-//   - type: aws_instance
-//     name: example
-//     properties:
-//       ami: ami-0c55b159cbfafe1f0
-//       instance_type: t2.micro
-// `;
+//   const yamlFilePath = 'C:\\Users\\arun1\\Cloud-Migration-Toolkit\\test.yml';
+//   const jsonFilePath = 'C:\\Users\\arun1\\Cloud-Migration-Toolkit\\test.json';
 
-//   const result = await generateTFYAML(yamlTestData);
-//   console.log('Conversion result:', result === 0 ? 'Success' : 'Failure');
+//   try {
+//     // Read YAML file
+//     const yamlContent = await fs.promises.readFile(yamlFilePath, 'utf-8');
+//     const parsedYaml = yaml.load(yamlContent);
+
+//     // Read JSON file
+//     const jsonContent = await fs.promises.readFile(jsonFilePath, 'utf-8');
+//     const parsedJson = JSON.parse(jsonContent);
+
+//     console.log(JSON.stringify(parsedYaml, null, 2));
+//     console.log(JSON.stringify(parsedJson, null, 2));
+
+//     // Compare the two objects
+//     if (JSON.stringify(parsedYaml, null, 2) === JSON.stringify(parsedJson, null, 2)) {
+//       console.log('The YAML and JSON files are identical!');
+//     } else {
+//       console.log('The YAML and JSON files are different.');
+//     }
+//   } catch (err) {
+//     console.error('An error occurred during the comparison:', err);
+//   }
 // })();
 
 // (async () => {

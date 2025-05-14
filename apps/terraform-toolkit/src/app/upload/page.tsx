@@ -48,7 +48,8 @@ export default function UploadPage() {
   const [isValidated, setIsValidated] = useState<boolean>(false);
   const [loading, setLoading] = useState<"validating" | "provisioning" | "viewingPlan" | null>(null);
   const [plan, setPlan] = useState<string | null>(null); 
-  const [showModal, setShowModal] = useState<boolean>(false); 
+  const [showPlanModal, setShowPlanModal] = useState<boolean>(false); 
+  const [showResourceModal, setShowResourceModal] = useState<boolean>(false); 
 
   const router = useRouter();
 
@@ -150,7 +151,9 @@ export default function UploadPage() {
       setLoading("provisioning");
       const { data: submissionData } = await submit();
       if (submissionData?.provisionFile?.success) {
+        const { data: resourceData } = await getResources(); 
         toast.success("Configuration saved and provisioned successfully!");
+        setShowResourceModal(true);
       } else {
         toast.error("Provisioning failed.");
       }
@@ -169,7 +172,7 @@ export default function UploadPage() {
       if (data?.viewPlan) {
         toast.success("Terraform plan fetched successfully!");
         setPlan(data.viewPlan); 
-        setShowModal(true);
+        setShowPlanModal(true);
       } else {
         toast.error("Failed to fetch the Terraform plan.");
       }
@@ -279,7 +282,7 @@ export default function UploadPage() {
         </>
       )}
 
-      {showModal && (
+      {showPlanModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 text-white p-6 rounded-lg w-3/4 max-w-4xl">
             <h2 className="text-2xl font-bold mb-4">Terraform Plan</h2>
@@ -290,7 +293,7 @@ export default function UploadPage() {
               <button
                 className="bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg"
                 onClick={() => {
-                  setShowModal(false);
+                  setShowPlanModal(false);
                   handleProvision();
                 }}
               >
@@ -298,7 +301,28 @@ export default function UploadPage() {
               </button>
               <button
                 className="bg-red-500 hover:bg-red-600 text-white py-2 px-6 rounded-lg"
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowPlanModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResourceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 text-white p-6 rounded-lg w-3/4 max-w-4xl">
+            <pre className="bg-gray-900 p-4 rounded-lg overflow-auto max-h-96 whitespace-pre-wrap">
+              Deployment Successful! Exit to Return Back to Home Page!
+            </pre>
+            <div className="flex justify-end gap-4 mt-4">
+              <button
+                className="bg-red-500 hover:bg-red-600 text-white py-2 px-6 rounded-lg"
+                onClick={() => {
+                  setShowResourceModal(false)
+                  router.push('/home')
+                }}
               >
                 Close
               </button>
