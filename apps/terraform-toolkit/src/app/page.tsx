@@ -12,8 +12,8 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (session) { // Testing some redirect stuff (WORKS)
-      console.log(session);
-      router.push('/options');
+      // console.log(session);
+      router.push('/home');
       // signOut();
       // console.log("Updated session: ", session);
     } else {
